@@ -114,7 +114,9 @@ func (ps *PhishingServer) registerRoutes() {
 	router.HandleFunc("/robots.txt", ps.RobotsHandler)
 	router.HandleFunc("/{path:.*}/track", ps.TrackHandler)
 	router.HandleFunc("/{path:.*}/report", ps.ReportHandler)
+	router.HandleFunc("/{path:.*}/attachment", ps.AttachmentHandler)
 	router.HandleFunc("/report", ps.ReportHandler)
+	router.HandleFunc("/attachment", ps.AttachmentHandler)
 	router.HandleFunc("/{path:.*}", ps.PhishHandler)
 
 	// Setup GZIP compression
@@ -191,6 +193,40 @@ func (ps *PhishingServer) ReportHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	err = rs.HandleEmailReport(d)
+	if err != nil {
+		log.Error(err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// AttachmentOpenedHandler tracks emails as they opened attachment in an email, updating the status for the given Result
+func (ps *PhishingServer) AttachmentHandler(w http.ResponseWriter, r *http.Request) {
+	r, err := setupContext(r)
+	w.Header().Set("Access-Control-Allow-Origin", "*") // To allow Chrome extensions (or other pages) to report a campaign without violating CORS
+	if err != nil {
+		// Log the error if it wasn't something we can safely ignore
+		if err != ErrInvalidRequest && err != ErrCampaignComplete {
+			log.Error(err)
+		}
+		http.NotFound(w, r)
+		return
+	}
+	// Check for a preview
+	if _, ok := ctx.Get(r, "result").(models.EmailRequest); ok {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	rs := ctx.Get(r, "result").(models.Result)
+	rid := ctx.Get(r, "rid").(string)
+	d := ctx.Get(r, "details").(models.EventDetails)
+
+	// Check for a transparency request
+	if strings.HasSuffix(rid, TransparencySuffix) {
+		ps.TransparencyHandler(w, r)
+		return
+	}
+
+	err = rs.HandleAttachmentOpened(d)
 	if err != nil {
 		log.Error(err)
 	}

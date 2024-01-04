@@ -36,6 +36,12 @@ var statuses = {
         icon: "fa-mouse-pointer",
         point: "ct-point-clicked"
     },
+    "Attachment Opened": {
+        color: "#FF8912",
+        label: "label-attachment-opened",
+        icon: "fa-file-archive-o",
+        point: "ct-point-attachment-opened"
+    },
     "Success": {
         color: "#f05b4f",
         label: "label-danger",
@@ -101,6 +107,7 @@ var statusMapping = {
     "Email Sent": "sent",
     "Email Opened": "opened",
     "Clicked Link": "clicked",
+    "Attachment Opened": "attachment_opened",
     "Submitted Data": "submitted_data",
     "Email Reported": "reported",
 }
@@ -392,7 +399,7 @@ function renderTimeline(data) {
                 '    <span class="timeline-date">' + moment.utc(event.time).local().format('MMMM Do YYYY h:mm:ss a') + '</span>'
             if (event.details) {
                 details = JSON.parse(event.details)
-                if (event.message == "Clicked Link" || event.message == "Submitted Data") {
+                if (event.message == "Clicked Link" || event.message == "Submitted Data" || event.message == "Attachment Opened") {
                     deviceView = renderDevice(details)
                     if (deviceView) {
                         results += deviceView
@@ -660,6 +667,9 @@ function poll() {
             });
             $.each(campaign.results, function (i, result) {
                 email_series_data[result.status]++;
+                if (result.attachment_opened) {
+                    email_series_data['Attachment Opened']++
+                }
                 if (result.reported) {
                     email_series_data['Email Reported']++
                 }
@@ -806,6 +816,9 @@ function load() {
                         moment(result.send_date).format('MMMM Do YYYY, h:mm:ss a')
                     ])
                     email_series_data[result.status]++;
+                    if (result.attachment_opened) {
+                        email_series_data['Attachment Opened']++
+                    }
                     if (result.reported) {
                         email_series_data['Email Reported']++
                     }

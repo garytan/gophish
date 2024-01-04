@@ -62,13 +62,14 @@ type CampaignSummary struct {
 
 // CampaignStats is a struct representing the statistics for a single campaign
 type CampaignStats struct {
-	Total         int64 `json:"total"`
-	EmailsSent    int64 `json:"sent"`
-	OpenedEmail   int64 `json:"opened"`
-	ClickedLink   int64 `json:"clicked"`
-	SubmittedData int64 `json:"submitted_data"`
-	EmailReported int64 `json:"email_reported"`
-	Error         int64 `json:"error"`
+	Total         	 int64 `json:"total"`
+	EmailsSent    	 int64 `json:"sent"`
+	OpenedEmail   	 int64 `json:"opened"`
+	ClickedLink   	 int64 `json:"clicked"`
+	AttachmentOpened int64 `json:"attachment_opened"`
+	SubmittedData 	 int64 `json:"submitted_data"`
+	EmailReported 	 int64 `json:"email_reported"`
+	Error         	 int64 `json:"error"`
 }
 
 // Event contains the fields for an event
@@ -276,6 +277,10 @@ func getCampaignStats(cid int64) (CampaignStats, error) {
 		return s, err
 	}
 	query.Where("status=?", EventClicked).Count(&s.ClickedLink)
+	if err != nil {
+		return s, err
+	}
+	query.Where("attachment_opened=?", true).Count(&s.AttachmentOpened)
 	if err != nil {
 		return s, err
 	}

@@ -310,6 +310,13 @@ var renderDevice = function (event_details) {
     var ua = UAParser(details.browser['user-agent'])
     var detailsString = '<div class="timeline-device-details">'
 
+    // Show ip address in details 
+    var ipString = '<div class="timeline-device-ip"><span class="fa fa-stack">' +
+    '<i class="fa fa-map-marker fa-stack-1x"></i></span> ' +
+    details.browser['address'] + '</div>'
+
+    detailsString += ipString
+
     var deviceIcon = 'laptop'
     if (ua.device.type) {
         if (ua.device.type == 'tablet' || ua.device.type == 'mobile') {

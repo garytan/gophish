@@ -602,6 +602,10 @@ td.details-control {
     font-size: .8em;
 }
 
+.timeline-device-ip>span.fa-stack {
+    font-size: .8em;
+}
+
 .timeline-device-browser>span.fa-stack>i.fa-stack-1x {
     font-size: 1.5em;
 }

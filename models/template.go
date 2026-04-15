@@ -59,20 +59,14 @@ func (t *Template) Validate() error {
 // GetTemplates returns the templates owned by the given user.
 func GetTemplates(uid int64) ([]Template, error) {
 	ts := []Template{}
-	err := db.Where("user_id=?", uid).Find(&ts).Error
+	err := db.Where("user_id=?", uid).Preload("Attachments").Find(&ts).Error
 	if err != nil {
 		log.Error(err)
 		return ts, err
 	}
 	for i := range ts {
-		// Get Attachments
-		err = db.Where("template_id=?", ts[i].Id).Find(&ts[i].Attachments).Error
-		if err == nil && len(ts[i].Attachments) == 0 {
+		if ts[i].Attachments == nil {
 			ts[i].Attachments = make([]Attachment, 0)
-		}
-		if err != nil && err != gorm.ErrRecordNotFound {
-			log.Error(err)
-			return ts, err
 		}
 	}
 	return ts, err

@@ -322,6 +322,19 @@ func GetCampaigns(uid int64) ([]Campaign, error) {
 	return cs, err
 }
 
+// campaignStatsRow is used to scan aggregate stats for multiple campaigns in one query.
+type campaignStatsRow struct {
+	CampaignId       int64
+	Total            int64
+	EmailsSent       int64
+	OpenedEmail      int64
+	ClickedLink      int64
+	SubmittedData    int64
+	AttachmentOpened int64
+	EmailReported    int64
+	Error            int64
+}
+
 // GetCampaignSummaries gets the summary objects for all the campaigns
 // owned by the current user
 func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
@@ -335,13 +348,77 @@ func GetCampaignSummaries(uid int64) (CampaignSummaries, error) {
 		log.Error(err)
 		return overview, err
 	}
+	if len(cs) == 0 {
+		overview.Total = 0
+		overview.Campaigns = cs
+		return overview, nil
+	}
+	// Collect campaign IDs for a single aggregate query
+	campaignIds := make([]int64, len(cs))
+	for i, c := range cs {
+		campaignIds[i] = c.Id
+	}
+	// Fetch all stats in one query instead of N*8 individual COUNT queries.
+	// MySQL supports SUM(bool_expr) directly; SQLite requires CASE WHEN.
+	var statsRows []campaignStatsRow
+	var statsSQL string
+	if conf.DBName == "mysql" {
+		statsSQL = `
+		SELECT campaign_id,
+			COUNT(*) as total,
+			SUM(status = ?) as emails_sent,
+			SUM(status = ?) as opened_email,
+			SUM(status = ?) as clicked_link,
+			SUM(status = ?) as submitted_data,
+			SUM(attachment_opened = 1) as attachment_opened,
+			SUM(reported = 1) as email_reported,
+			SUM(status = ?) as error
+		FROM results
+		WHERE campaign_id IN (?)
+		GROUP BY campaign_id`
+	} else {
+		statsSQL = `
+		SELECT campaign_id,
+			COUNT(*) as total,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as emails_sent,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as opened_email,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as clicked_link,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as submitted_data,
+			SUM(CASE WHEN attachment_opened = 1 THEN 1 ELSE 0 END) as attachment_opened,
+			SUM(CASE WHEN reported = 1 THEN 1 ELSE 0 END) as email_reported,
+			SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as error
+		FROM results
+		WHERE campaign_id IN (?)
+		GROUP BY campaign_id`
+	}
+	err = db.Raw(statsSQL,
+		EventSent, EventOpened, EventClicked, EventDataSubmit, Error, campaignIds,
+	).Scan(&statsRows).Error
+	if err != nil {
+		log.Error(err)
+		return overview, err
+	}
+	statsMap := make(map[int64]campaignStatsRow, len(statsRows))
+	for _, row := range statsRows {
+		statsMap[row.CampaignId] = row
+	}
 	for i := range cs {
-		s, err := getCampaignStats(cs[i].Id)
-		if err != nil {
-			log.Error(err)
-			return overview, err
+		row := statsMap[cs[i].Id]
+		// Apply the same backfill logic as getCampaignStats:
+		// submitted data implies clicked link implies opened email implies email sent
+		row.ClickedLink += row.SubmittedData
+		row.OpenedEmail += row.ClickedLink
+		row.EmailsSent += row.OpenedEmail
+		cs[i].Stats = CampaignStats{
+			Total:            row.Total,
+			EmailsSent:       row.EmailsSent,
+			OpenedEmail:      row.OpenedEmail,
+			ClickedLink:      row.ClickedLink,
+			SubmittedData:    row.SubmittedData,
+			AttachmentOpened: row.AttachmentOpened,
+			EmailReported:    row.EmailReported,
+			Error:            row.Error,
 		}
-		cs[i].Stats = s
 	}
 	overview.Total = int64(len(cs))
 	overview.Campaigns = cs
